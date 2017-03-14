@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "311714018653",
+    "firebase_url": "https://myfirstmapboxapp-11599.firebaseio.com",
+    "project_id": "myfirstmapboxapp-11599",
+    "storage_bucket": "myfirstmapboxapp-11599.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:311714018653:android:26e0328c0ee38789",
+        "android_client_info": {
+          "package_name": "com.fay.david.myfirstmapboxapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "311714018653-d9huerniu5rkj83r4neear742j63o4n1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fay.david.myfirstmapboxapp",
+            "certificate_hash": "0f43680638ca3d8c3ba99ca83d55ccb8866b656e"
+          }
+        },
+        {
+          "client_id": "311714018653-bltirc41nnss9ulem2edmjia2b562ctg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_j8r8K6Gh8FDEM1wVsygH7lO89t7Q4nk"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 2,
+          "other_platform_oauth_client": [
+            {
+              "client_id": "311714018653-bltirc41nnss9ulem2edmjia2b562ctg.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

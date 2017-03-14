@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">My First Mapbox App</string>
+    <string name="access_token">pk.eyJ1IjoiZGF2aWRhZmF5anIiLCJhIjoiY2l6NWxmZzdtMDZmcDMycGhpbmZkdXdyYyJ9.ZvIhh05HU7pPffSB0PCszA</string>
+</resources>
