@@ -55,14 +55,15 @@ public class MainActivity extends AppCompatActivity {
         FirebaseDatabase.getInstance().setPersistenceEnabled(true);
         //get an instance and reference to the database
         FirebaseDatabase mDatabase = FirebaseDatabase.getInstance();
+        //get a reference to the location entries in the database
         DatabaseReference mDatabaseRef = mDatabase.getReference("location");
-
+        //mapbox key
         MapboxAccountManager.start(this,getString(R.string.access_token));
 
         setContentView(R.layout.activity_main);
 
         locationServices = LocationServices.getLocationServices(MainActivity.this);
-
+        //create the compass icon
         IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
         Drawable iconDrawable = ContextCompat.getDrawable(MainActivity.this, R.drawable.compass);
         final Icon icon = iconFactory.fromDrawable(iconDrawable);
@@ -71,38 +72,31 @@ public class MainActivity extends AppCompatActivity {
         mapView = (MapView) findViewById(R.id.mapview);
 
         mapView.onCreate(savedInstanceState);
+        //declare the inital two markers
         final MarkerViewOptions home = new MarkerViewOptions()
-                .position(new LatLng(39.700931, -83.743719)).title("Our House").snippet("I live here");
+                .position(new LatLng(39.700931, -83.743719)).title("The big red house").snippet("look out for the dog poop");
         final MarkerViewOptions compass = new MarkerViewOptions().icon(icon).position(new LatLng(0,0)).title("moving marker").snippet("watch me go");
-
-
 
         // Add a MapboxMap
         mapView.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(MapboxMap mapboxMap){
                 map = mapboxMap;
-
                 // customize map with markers, polylines etc
                 map.setStyleUrl(Style.SATELLITE_STREETS);
-
                 map.addMarker(home);
-
             }
         });
-
         // Read from the database
         mDatabaseRef.addValueEventListener(new ValueEventListener() {
+
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-
                 // This method is called once with the initial value and again
                 // whenever data at this location is updated.
                 Double lat = dataSnapshot.child("testuser").child("lat").getValue(Double.class);
                 Double lng = dataSnapshot.child("testuser").child("lng").getValue(Double.class);
-
                 map.addMarker(compass).setPosition(new LatLng(lat, lng));
-
                 Log.d(TAG, "Value is: " + lat + " " + lng);
             }
 
@@ -112,7 +106,6 @@ public class MainActivity extends AppCompatActivity {
                 Log.w(TAG, "Failed to read value.", error.toException());
             }
         });
-
 
         /*floatingActionButton = (FloatingActionButton) findViewById(R.id.location_toggle_fab);
         floatingActionButton.setOnClickListener(new View.OnClickListener() {
