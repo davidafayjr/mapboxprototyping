@@ -18,7 +18,6 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.Query;
 import com.google.firebase.database.ValueEventListener;
 import com.mapbox.mapboxsdk.MapboxAccountManager;
 import com.mapbox.mapboxsdk.camera.CameraUpdateFactory;
@@ -42,8 +41,8 @@ public class MainActivity extends AppCompatActivity {
     private MapView mapView;
     private LocationServices locationServices;
     private MapboxMap map;
-//    private FloatingActionButton floatingActionButton;
-//    private DatabaseReference mDatabase;
+    private FloatingActionButton floatingActionButton;
+
 
     private static final int PERMISSIONS_LOCATION = 0;
 
@@ -70,8 +69,9 @@ public class MainActivity extends AppCompatActivity {
 
         //create a mapview
         mapView = (MapView) findViewById(R.id.mapview);
-
         mapView.onCreate(savedInstanceState);
+
+
         //declare the inital two markers
         final MarkerViewOptions home = new MarkerViewOptions()
                 .position(new LatLng(39.700931, -83.743719)).title("The big red house").snippet("look out for the dog poop");
@@ -107,7 +107,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        /*floatingActionButton = (FloatingActionButton) findViewById(R.id.location_toggle_fab);
+        floatingActionButton = (FloatingActionButton) findViewById(R.id.location_toggle_fab);
         floatingActionButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -115,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
                     toggleGps(!map.isMyLocationEnabled());
                 }
             }
-        });*/
+        });
     }
 
     @Override
@@ -187,9 +187,9 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             });
-//            floatingActionButton.setImageResource(R.drawable.ic_location_disabled_24dp);
+            floatingActionButton.setImageResource(R.drawable.ic_location_disabled_24dp);
         } else {
-//            floatingActionButton.setImageResource(R.drawable.ic_my_location_24dp);
+            floatingActionButton.setImageResource(R.drawable.ic_my_location_24dp);
         }
         // Enable or disable the location layer on the map
         map.setMyLocationEnabled(enabled);
