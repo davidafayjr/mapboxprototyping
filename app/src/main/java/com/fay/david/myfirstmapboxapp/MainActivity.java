@@ -1,6 +1,8 @@
 package com.fay.david.myfirstmapboxapp;
 
 import android.graphics.drawable.Drawable;
+import android.location.Criteria;
+import android.location.LocationManager;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -14,6 +16,11 @@ import android.content.pm.PackageManager;
 import android.Manifest;
 
 
+import com.firebase.geofire.GeoFire;
+import com.firebase.geofire.GeoLocation;
+import com.firebase.geofire.GeoQuery;
+import com.firebase.geofire.GeoQueryEventListener;
+import com.firebase.geofire.LocationCallback;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -31,8 +38,6 @@ import com.mapbox.mapboxsdk.location.LocationServices;
 import com.mapbox.mapboxsdk.maps.MapView;
 import com.mapbox.mapboxsdk.maps.MapboxMap;
 import com.mapbox.mapboxsdk.maps.OnMapReadyCallback;
-
-import java.security.BasicPermission;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -58,6 +63,9 @@ public class MainActivity extends AppCompatActivity {
         DatabaseReference mDatabaseRef = mDatabase.getReference("location");
         //mapbox key
         MapboxAccountManager.start(this,getString(R.string.access_token));
+        // GeoFire database rference
+        DatabaseReference geoFireDBref = FirebaseDatabase.getInstance().getReference("GeoFire");
+        GeoFire geoFire = new GeoFire(geoFireDBref);
 
         setContentView(R.layout.activity_main);
 
@@ -66,6 +74,10 @@ public class MainActivity extends AppCompatActivity {
         IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
         Drawable iconDrawable = ContextCompat.getDrawable(MainActivity.this, R.drawable.compass);
         final Icon icon = iconFactory.fromDrawable(iconDrawable);
+        final Icon dogicon = iconFactory.fromAsset("dog.png");
+        final Icon drone = iconFactory.fromAsset("003-drone.png");
+        final Icon house = iconFactory.fromAsset("house.png");
+
 
         //create a mapview
         mapView = (MapView) findViewById(R.id.mapview);
@@ -73,9 +85,9 @@ public class MainActivity extends AppCompatActivity {
 
 
         //declare the inital two markers
-        final MarkerViewOptions home = new MarkerViewOptions()
+        final MarkerViewOptions home = new MarkerViewOptions().icon(house)
                 .position(new LatLng(39.700931, -83.743719)).title("The big red house").snippet("look out for the dog poop");
-        final MarkerViewOptions compass = new MarkerViewOptions().icon(icon).position(new LatLng(0,0)).title("moving marker").snippet("watch me go");
+        final MarkerViewOptions dog = new MarkerViewOptions().icon(dogicon).position(new LatLng(0,0)).title("moving marker").snippet("watch me go");
 
         // Add a MapboxMap
         mapView.getMapAsync(new OnMapReadyCallback() {
@@ -85,8 +97,82 @@ public class MainActivity extends AppCompatActivity {
                 // customize map with markers, polylines etc
                 map.setStyleUrl(Style.SATELLITE_STREETS);
                 map.addMarker(home);
+
             }
         });
+
+        //try some geofire stuff
+
+        LocationManager service = (LocationManager)
+                getSystemService(LOCATION_SERVICE);
+        Criteria criteria = new Criteria();
+        String provider = service.getBestProvider(criteria, false);
+        Location location = service.getLastKnownLocation(provider);
+
+
+        geoFire.setLocation("Rouge One", new GeoLocation(location.getLatitude()+.0007, location.getLongitude()+.0008));
+        geoFire.setLocation("Red One", new GeoLocation(location.getLatitude()+.0002, location.getLongitude()+.0003));
+        geoFire.setLocation("Echo Seven", new GeoLocation(location.getLatitude()-.0009, location.getLongitude()-.0003));
+        geoFire.setLocation("Jedi One", new GeoLocation(location.getLatitude()-.0002, location.getLongitude()+.0004));
+        geoFire.setLocation("Red Leader", new GeoLocation(location.getLatitude()+.0005, location.getLongitude()-.0006));
+        geoFire.setLocation("Red three", new GeoLocation(location.getLatitude()+.0002, location.getLongitude()+.0003));
+        geoFire.setLocation("Red six", new GeoLocation(location.getLatitude()-.001, location.getLongitude()-.0009));
+        geoFire.setLocation("Red twelve", new GeoLocation(location.getLatitude()-.0007, location.getLongitude()+.0014));
+        geoFire.setLocation("Red five", new GeoLocation(location.getLatitude()+.0015, location.getLongitude()-.0019));
+
+
+//        geoFire.getLocation("first_GF_point", new LocationCallback() {
+//            @Override
+//            public void onLocationResult(String key, GeoLocation location) {
+//                if (location != null) {
+//                    System.out.println(String.format("The location for key %s is [%f,%f]", key, location.latitude, location.longitude));
+//                } else {
+//                    System.out.println(String.format("There is no location for key %s in GeoFire", key));
+//                }
+//            }
+//
+//            @Override
+//            public void onCancelled(DatabaseError databaseError) {
+//                System.err.println("There was an error getting the GeoFire location: " + databaseError);
+//            }
+//        });
+
+        GeoQuery geoQuery = geoFire.queryAtLocation(new GeoLocation(location.getLatitude(), location.getLongitude()), 0.2);
+
+        geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
+
+            @Override
+            public void onKeyEntered(String key, GeoLocation location) {
+                MarkerViewOptions geofireMarker = new MarkerViewOptions().icon(drone).position(new LatLng(0, 0)).title("GeoFire Marker").snippet(String.format("%s", key));
+                map.addMarker(geofireMarker).setPosition(new LatLng(location.latitude, location.longitude));
+                System.out.println(String.format("Key %s entered the search area at [%f,%f]", key, location.latitude, location.longitude));
+            }
+
+            @Override
+            public void onKeyExited(String key) {
+                System.out.println(String.format("Key %s is no longer in the search area", key));
+            }
+
+            @Override
+            public void onKeyMoved(String key, GeoLocation location) {
+                MarkerViewOptions geofireMarker = new MarkerViewOptions().icon(drone).position(new LatLng(0, 0)).title("GeoFire Marker").snippet(String.format("%s", key));
+                map.addMarker(geofireMarker).setPosition(new LatLng(location.latitude, location.longitude));
+                System.out.println(String.format("Key %s moved within the search area to [%f,%f]", key, location.latitude, location.longitude));
+            }
+
+            @Override
+            public void onGeoQueryReady() {
+                System.out.println("All initial data has been loaded and events have been fired!");
+            }
+
+            @Override
+            public void onGeoQueryError(DatabaseError error) {
+                System.err.println("There was an error with this query: " + error);
+            }
+        });
+
+
+
         // Read from the database
         mDatabaseRef.addValueEventListener(new ValueEventListener() {
 
@@ -96,7 +182,7 @@ public class MainActivity extends AppCompatActivity {
                 // whenever data at this location is updated.
                 Double lat = dataSnapshot.child("testuser").child("lat").getValue(Double.class);
                 Double lng = dataSnapshot.child("testuser").child("lng").getValue(Double.class);
-                map.addMarker(compass).setPosition(new LatLng(lat, lng));
+                map.addMarker(dog).setPosition(new LatLng(lat, lng));
                 Log.d(TAG, "Value is: " + lat + " " + lng);
             }
 
