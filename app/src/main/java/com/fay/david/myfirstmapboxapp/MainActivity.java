@@ -42,6 +42,10 @@ import com.mapbox.mapboxsdk.maps.OnMapReadyCallback;
 
 public class MainActivity extends AppCompatActivity {
 
+    //TODO: ADD NO-FLY ZONE POLYGONS TO THE APP
+    //TODO: ADD NO-FLY ZONE SECTION TO DATABASE
+    //TODO: IMPLEMENT A BETTER GET CURRENT LOCATION FUNCTION
+
     private static final String TAG = "MainActivity";
     private MapView mapView;
     private LocationServices locationServices;
@@ -57,12 +61,16 @@ public class MainActivity extends AppCompatActivity {
 
         //Call this to cache the database locally
         FirebaseDatabase.getInstance().setPersistenceEnabled(true);
+
         //get an instance and reference to the database
         FirebaseDatabase mDatabase = FirebaseDatabase.getInstance();
+
         //get a reference to the location entries in the database
         DatabaseReference mDatabaseRef = mDatabase.getReference("location");
+
         //mapbox key
         MapboxAccountManager.start(this,getString(R.string.access_token));
+
         // GeoFire database rference
         DatabaseReference geoFireDBref = FirebaseDatabase.getInstance().getReference("GeoFire");
         GeoFire geoFire = new GeoFire(geoFireDBref);
@@ -70,10 +78,12 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         locationServices = LocationServices.getLocationServices(MainActivity.this);
+
         //create the compass icon
         IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
         Drawable iconDrawable = ContextCompat.getDrawable(MainActivity.this, R.drawable.compass);
         final Icon icon = iconFactory.fromDrawable(iconDrawable);
+        // a much simpler way to create custom icons from png files
         final Icon dogicon = iconFactory.fromAsset("dog.png");
         final Icon drone = iconFactory.fromAsset("003-drone.png");
         final Icon house = iconFactory.fromAsset("house.png");
@@ -84,12 +94,13 @@ public class MainActivity extends AppCompatActivity {
         mapView.onCreate(savedInstanceState);
 
 
-        //declare the inital two markers
+        //declare the initial two markers
         final MarkerViewOptions home = new MarkerViewOptions().icon(house)
                 .position(new LatLng(39.700931, -83.743719)).title("The big red house").snippet("look out for the dog poop");
         final MarkerViewOptions dog = new MarkerViewOptions().icon(dogicon).position(new LatLng(0,0)).title("moving marker").snippet("watch me go");
 
-        // Add a MapboxMap
+        // the creates the the MapboxMap display and places one marker on it
+        // the style is also set here
         mapView.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(MapboxMap mapboxMap){
@@ -101,15 +112,21 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        //try some geofire stuff
 
+        // These next couple of lines get the curren location of the user
+        // They need to be rewritten better the were just the first example I found on stack overflow
         LocationManager service = (LocationManager)
                 getSystemService(LOCATION_SERVICE);
         Criteria criteria = new Criteria();
         String provider = service.getBestProvider(criteria, false);
         Location location = service.getLastKnownLocation(provider);
 
-
+        // THIS IS WHERE THE GEOFIRE CODE STARTS
+        // this creates a few fake drone entries in the data base using the location I just got from the device
+        // I've supplied offsets to each of them
+        // TODO: these should be in their own app simulating flight
+        // TODO: WHEN I TESTED THIS FROM WRIGHT STATE THE LOCATION OF THE DRONES WAS STILL SET AROUND MY HOUSE
+        // TODO: TROUBLE SHOOT WHAT I DID WRONG WITH SETTING THE LOCAIONS
         geoFire.setLocation("Rouge One", new GeoLocation(location.getLatitude()+.0007, location.getLongitude()+.0008));
         geoFire.setLocation("Red One", new GeoLocation(location.getLatitude()+.0002, location.getLongitude()+.0003));
         geoFire.setLocation("Echo Seven", new GeoLocation(location.getLatitude()-.0009, location.getLongitude()-.0003));
@@ -120,8 +137,8 @@ public class MainActivity extends AppCompatActivity {
         geoFire.setLocation("Red twelve", new GeoLocation(location.getLatitude()-.0007, location.getLongitude()+.0014));
         geoFire.setLocation("Red five", new GeoLocation(location.getLatitude()+.0015, location.getLongitude()-.0019));
 
-
-//        geoFire.getLocation("first_GF_point", new LocationCallback() {
+        // this is a single event listener from geofire
+//        geoFire.getLocation("Rouge One", new LocationCallback() {
 //            @Override
 //            public void onLocationResult(String key, GeoLocation location) {
 //                if (location != null) {
@@ -137,7 +154,11 @@ public class MainActivity extends AppCompatActivity {
 //            }
 //        });
 
+        // TODO: WHEN I TESTED THIS FROM WRIGHT STATE THE LOCATION OF THE DRONES WAS STILL SET AROUND MY HOUSE
+        // TODO: TROUBLE SHOOT WHAT I DID WRONG WITH SETTING OR FETCHING THE LOCATIONS
+        // this is were I set up the location based geoquery based off of the users location I got earlier
         GeoQuery geoQuery = geoFire.queryAtLocation(new GeoLocation(location.getLatitude(), location.getLongitude()), 0.2);
+        //  this is the event listener for the geoquery
 
         geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
 
@@ -173,7 +194,7 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-        // Read from the database
+        // This is the event listener from the firebase database for a single test user
         mDatabaseRef.addValueEventListener(new ValueEventListener() {
 
             @Override
@@ -193,6 +214,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // this is the button that toggles centering the app on the users location
         floatingActionButton = (FloatingActionButton) findViewById(R.id.location_toggle_fab);
         floatingActionButton.setOnClickListener(new View.OnClickListener() {
             @Override
