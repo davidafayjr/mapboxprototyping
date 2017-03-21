@@ -45,6 +45,8 @@ public class MainActivity extends AppCompatActivity {
     //TODO: ADD NO-FLY ZONE POLYGONS TO THE APP
     //TODO: ADD NO-FLY ZONE SECTION TO DATABASE
     //TODO: IMPLEMENT A BETTER GET CURRENT LOCATION FUNCTION
+    //TODO: CREATE A DRONE SIMULATOR APP THAT FLYS WITH SIMULATED LOCATIONS
+    //TODO: AND TRANSMIT LOCATION BACK TO SERVER AND CHECKS NO-FLY ZONES
 
     private static final String TAG = "MainActivity";
     private MapView mapView;
@@ -115,6 +117,7 @@ public class MainActivity extends AppCompatActivity {
 
         // These next couple of lines get the curren location of the user
         // They need to be rewritten better the were just the first example I found on stack overflow
+        // a better implementation can probably be derived from the enable location method
         LocationManager service = (LocationManager)
                 getSystemService(LOCATION_SERVICE);
         Criteria criteria = new Criteria();
