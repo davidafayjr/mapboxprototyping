@@ -1,6 +1,10 @@
 package com.fay.david.myfirstmapboxapp;
 
-import android.graphics.drawable.Drawable;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
+import android.animation.TypeEvaluator;
+import android.animation.ValueAnimator;
+import android.content.Context;
 import android.location.Criteria;
 import android.location.LocationManager;
 import android.support.v4.content.ContextCompat;
@@ -8,9 +12,14 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.Toast;
 import android.support.design.widget.FloatingActionButton;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.location.Location;
 import android.content.pm.PackageManager;
 import android.Manifest;
@@ -20,27 +29,38 @@ import com.firebase.geofire.GeoFire;
 import com.firebase.geofire.GeoLocation;
 import com.firebase.geofire.GeoQuery;
 import com.firebase.geofire.GeoQueryEventListener;
-import com.firebase.geofire.LocationCallback;
+
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
-import com.mapbox.mapboxsdk.MapboxAccountManager;
+
+import com.mapbox.mapboxsdk.Mapbox;
+import com.mapbox.mapboxsdk.annotations.Marker;
+import com.mapbox.mapboxsdk.annotations.MarkerView;
+import com.mapbox.mapboxsdk.camera.CameraPosition;
 import com.mapbox.mapboxsdk.camera.CameraUpdateFactory;
 import com.mapbox.mapboxsdk.annotations.Icon;
 import com.mapbox.mapboxsdk.annotations.IconFactory;
 import com.mapbox.mapboxsdk.annotations.MarkerViewOptions;
 import com.mapbox.mapboxsdk.constants.Style;
 import com.mapbox.mapboxsdk.geometry.LatLng;
-import com.mapbox.mapboxsdk.location.LocationListener;
-import com.mapbox.mapboxsdk.location.LocationServices;
+import com.mapbox.mapboxsdk.geometry.LatLngBounds;
+import com.mapbox.mapboxsdk.location.LocationSource;
 import com.mapbox.mapboxsdk.maps.MapView;
 import com.mapbox.mapboxsdk.maps.MapboxMap;
 import com.mapbox.mapboxsdk.maps.OnMapReadyCallback;
 
+import com.mapbox.services.android.telemetry.location.LocationEngine;
+import com.mapbox.services.android.telemetry.location.LocationEngineListener;
+import com.mapbox.services.android.telemetry.permissions.PermissionsListener;
+import com.mapbox.services.android.telemetry.permissions.PermissionsManager;
 
-public class MainActivity extends AppCompatActivity {
+import java.util.List;
+@SuppressWarnings( {"MissingPermission"})
+
+public class MainActivity extends AppCompatActivity implements PermissionsListener {
 
     //TODO: ADD NO-FLY ZONE POLYGONS TO THE APP
     //TODO: ADD NO-FLY ZONE SECTION TO DATABASE
@@ -50,16 +70,35 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     private MapView mapView;
-    private LocationServices locationServices;
+
     private MapboxMap map;
     private FloatingActionButton floatingActionButton;
 
 
-    private static final int PERMISSIONS_LOCATION = 0;
+    private LocationEngine locationEngine;
+    private LocationEngineListener locationEngineListener;
+    private PermissionsManager permissionsManager;
+    private GeoQuery geoQuery;
+    private Location lastLocation;
+    private MarkerViewOptions dog;
+    private MarkerViewOptions home;
+    private GeoFire geoFire;
+    private DatabaseReference firebaseDatabaseReference;
+    private DatabaseReference geofireDatabaseReference;
+    private MarkerViewOptions geoFireDrone;
+    private Marker droneMarker;
+    private Icon dogicon;
+    private Icon drone;
+    private Icon house;
+    private double radius;
+    private double lastRadius;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        radius =0.2;
+        lastRadius = 0.0;
 
         //Call this to cache the database locally
         FirebaseDatabase.getInstance().setPersistenceEnabled(true);
@@ -68,152 +107,89 @@ public class MainActivity extends AppCompatActivity {
         FirebaseDatabase mDatabase = FirebaseDatabase.getInstance();
 
         //get a reference to the location entries in the database
-        DatabaseReference mDatabaseRef = mDatabase.getReference("location");
-
-        //mapbox key
-        MapboxAccountManager.start(this,getString(R.string.access_token));
+        firebaseDatabaseReference = mDatabase.getReference("location");
 
         // GeoFire database rference
-        DatabaseReference geoFireDBref = FirebaseDatabase.getInstance().getReference("GeoFire");
-        GeoFire geoFire = new GeoFire(geoFireDBref);
+        geofireDatabaseReference = FirebaseDatabase.getInstance().getReference("GeoFire");
+        geoFire = new GeoFire(geofireDatabaseReference);
 
+        // Mapbox access token is configured here. This needs to be called either in your application
+        // object or in the same activity which contains the mapview.
+        Mapbox.getInstance(this, getString(R.string.access_token));
+
+        // This contains the MapView in XML and needs to be called after the account manager
         setContentView(R.layout.activity_main);
 
-        locationServices = LocationServices.getLocationServices(MainActivity.this);
-
-        //create the compass icon
         IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
-        Drawable iconDrawable = ContextCompat.getDrawable(MainActivity.this, R.drawable.compass);
-        final Icon icon = iconFactory.fromDrawable(iconDrawable);
         // a much simpler way to create custom icons from png files
-        final Icon dogicon = iconFactory.fromAsset("dog.png");
-        final Icon drone = iconFactory.fromAsset("003-drone.png");
-        final Icon house = iconFactory.fromAsset("house.png");
+        dogicon = iconFactory.fromAsset("dog.png");
+        drone = iconFactory.fromAsset("003-drone.png");
+        house = iconFactory.fromAsset("house.png");
 
+        //this is mapboxes location service
+        locationEngine = LocationSource.getLocationEngine(this);
+        locationEngine.activate();
 
         //create a mapview
         mapView = (MapView) findViewById(R.id.mapview);
         mapView.onCreate(savedInstanceState);
 
-
-        //declare the initial two markers
-        final MarkerViewOptions home = new MarkerViewOptions().icon(house)
-                .position(new LatLng(39.700931, -83.743719)).title("The big red house").snippet("look out for the dog poop");
-        final MarkerViewOptions dog = new MarkerViewOptions().icon(dogicon).position(new LatLng(0,0)).title("moving marker").snippet("watch me go");
-
         // the creates the the MapboxMap display and places one marker on it
         // the style is also set here
         mapView.getMapAsync(new OnMapReadyCallback() {
             @Override
-            public void onMapReady(MapboxMap mapboxMap){
+            public void onMapReady(final MapboxMap mapboxMap) {
+
                 map = mapboxMap;
                 // customize map with markers, polylines etc
+                home = new MarkerViewOptions().icon(house)
+                        .position(new LatLng(39.700931, -83.743719)).title("The big red house").snippet("look out for the dog poop");
+                dog = new MarkerViewOptions().icon(dogicon).position(new LatLng(0, 0)).title("moving marker").snippet("watch me go");
+
                 map.setStyleUrl(Style.SATELLITE_STREETS);
                 map.addMarker(home);
 
-            }
-        });
+                // check permissions
+                if (!PermissionsManager.areLocationPermissionsGranted(MainActivity.this)) {
+                    permissionsManager.requestLocationPermissions(MainActivity.this);
+                } else {
+                    lastLocation = locationEngine.getLastLocation();
+                    setInitialMapPosition();
+                    enableLocation(true);
+
+                }
 
 
-        // These next couple of lines get the curren location of the user
-        // They need to be rewritten better the were just the first example I found on stack overflow
-        // a better implementation can probably be derived from the enable location method
-        LocationManager service = (LocationManager)
-                getSystemService(LOCATION_SERVICE);
-        Criteria criteria = new Criteria();
-        String provider = service.getBestProvider(criteria, false);
-        Location location = service.getLastKnownLocation(provider);
+                if (lastLocation == null) {
+                    //force initial location
+                    LocationManager service = (LocationManager)
+                            getSystemService(LOCATION_SERVICE);
+                    Criteria criteria = new Criteria();
+                    String provider = service.getBestProvider(criteria, false);
+                    lastLocation = service.getLastKnownLocation(provider);
+                }
 
-        // THIS IS WHERE THE GEOFIRE CODE STARTS
-        // this creates a few fake drone entries in the data base using the location I just got from the device
-        // I've supplied offsets to each of them
-        // TODO: these should be in their own app simulating flight
-        // TODO: WHEN I TESTED THIS FROM WRIGHT STATE THE LOCATION OF THE DRONES WAS STILL SET AROUND MY HOUSE
-        // TODO: TROUBLE SHOOT WHAT I DID WRONG WITH SETTING THE LOCAIONS
-        geoFire.setLocation("Rouge One", new GeoLocation(location.getLatitude()+.0007, location.getLongitude()+.0008));
-        geoFire.setLocation("Red One", new GeoLocation(location.getLatitude()+.0002, location.getLongitude()+.0003));
-        geoFire.setLocation("Echo Seven", new GeoLocation(location.getLatitude()-.0009, location.getLongitude()-.0003));
-        geoFire.setLocation("Jedi One", new GeoLocation(location.getLatitude()-.0002, location.getLongitude()+.0004));
-        geoFire.setLocation("Red Leader", new GeoLocation(location.getLatitude()+.0005, location.getLongitude()-.0006));
-        geoFire.setLocation("Red three", new GeoLocation(location.getLatitude()+.0002, location.getLongitude()+.0003));
-        geoFire.setLocation("Red six", new GeoLocation(location.getLatitude()-.001, location.getLongitude()-.0009));
-        geoFire.setLocation("Red twelve", new GeoLocation(location.getLatitude()-.0007, location.getLongitude()+.0014));
-        geoFire.setLocation("Red five", new GeoLocation(location.getLatitude()+.0015, location.getLongitude()-.0019));
+                uploadTheDronesToGeofire();
+                updateDrones();
+                fetchTheDogFromFirebase();
 
-        // this is a single event listener from geofire
-//        geoFire.getLocation("Rouge One", new LocationCallback() {
-//            @Override
-//            public void onLocationResult(String key, GeoLocation location) {
-//                if (location != null) {
-//                    System.out.println(String.format("The location for key %s is [%f,%f]", key, location.latitude, location.longitude));
-//                } else {
-//                    System.out.println(String.format("There is no location for key %s in GeoFire", key));
-//                }
-//            }
-//
-//            @Override
-//            public void onCancelled(DatabaseError databaseError) {
-//                System.err.println("There was an error getting the GeoFire location: " + databaseError);
-//            }
-//        });
+                map.setOnCameraChangeListener(new MapboxMap.OnCameraChangeListener() {
+                    @Override
+                    public void onCameraChange(CameraPosition position) {
 
-        // TODO: WHEN I TESTED THIS FROM WRIGHT STATE THE LOCATION OF THE DRONES WAS STILL SET AROUND MY HOUSE
-        // TODO: TROUBLE SHOOT WHAT I DID WRONG WITH SETTING OR FETCHING THE LOCATIONS
-        // this is were I set up the location based geoquery based off of the users location I got earlier
-        GeoQuery geoQuery = geoFire.queryAtLocation(new GeoLocation(location.getLatitude(), location.getLongitude()), 0.2);
-        //  this is the event listener for the geoquery
+                        LatLngBounds bounds = mapboxMap.getProjection().getVisibleRegion().latLngBounds;
+                        double northLat = bounds.getLatNorth();
+                        double eastLng = bounds.getLonEast();
+                        LatLng center = bounds.getCenter();
+                        LatLng northEastCorner = new LatLng(northLat, eastLng);
+                        radius = center.distanceTo(northEastCorner);
+                        radius = radius * .001;
 
-        geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
+                        System.out.println(String.format("Radius is %f", radius));
+                        geoQuery.setRadius(radius);
 
-            @Override
-            public void onKeyEntered(String key, GeoLocation location) {
-                MarkerViewOptions geofireMarker = new MarkerViewOptions().icon(drone).position(new LatLng(0, 0)).title("GeoFire Marker").snippet(String.format("%s", key));
-                map.addMarker(geofireMarker).setPosition(new LatLng(location.latitude, location.longitude));
-                System.out.println(String.format("Key %s entered the search area at [%f,%f]", key, location.latitude, location.longitude));
-            }
-
-            @Override
-            public void onKeyExited(String key) {
-                System.out.println(String.format("Key %s is no longer in the search area", key));
-            }
-
-            @Override
-            public void onKeyMoved(String key, GeoLocation location) {
-                MarkerViewOptions geofireMarker = new MarkerViewOptions().icon(drone).position(new LatLng(0, 0)).title("GeoFire Marker").snippet(String.format("%s", key));
-                map.addMarker(geofireMarker).setPosition(new LatLng(location.latitude, location.longitude));
-                System.out.println(String.format("Key %s moved within the search area to [%f,%f]", key, location.latitude, location.longitude));
-            }
-
-            @Override
-            public void onGeoQueryReady() {
-                System.out.println("All initial data has been loaded and events have been fired!");
-            }
-
-            @Override
-            public void onGeoQueryError(DatabaseError error) {
-                System.err.println("There was an error with this query: " + error);
-            }
-        });
-
-
-
-        // This is the event listener from the firebase database for a single test user
-        mDatabaseRef.addValueEventListener(new ValueEventListener() {
-
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                // This method is called once with the initial value and again
-                // whenever data at this location is updated.
-                Double lat = dataSnapshot.child("testuser").child("lat").getValue(Double.class);
-                Double lng = dataSnapshot.child("testuser").child("lng").getValue(Double.class);
-                map.addMarker(dog).setPosition(new LatLng(lat, lng));
-                Log.d(TAG, "Value is: " + lat + " " + lng);
-            }
-
-            @Override
-            public void onCancelled(DatabaseError error) {
-                // Failed to read value
-                Log.w(TAG, "Failed to read value.", error.toException());
+                    }
+                });
             }
         });
 
@@ -233,6 +209,30 @@ public class MainActivity extends AppCompatActivity {
     public void onResume() {
         super.onResume();
         mapView.onResume();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        mapView.onStart();
+        if (locationEngine != null && locationEngineListener != null) {
+            locationEngine.activate();
+            locationEngine.requestLocationUpdates();
+            locationEngine.addLocationEngineListener(locationEngineListener);
+
+        }
+
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        mapView.onStop();
+        if (locationEngine != null && locationEngineListener != null) {
+            locationEngine.removeLocationEngineListener(locationEngineListener);
+            locationEngine.removeLocationUpdates();
+            locationEngine.deactivate();
+        }
     }
 
     @Override
@@ -259,16 +259,131 @@ public class MainActivity extends AppCompatActivity {
     public void onDestroy() {
         super.onDestroy();
         mapView.onDestroy();
+        if (locationEngineListener != null) {
+            locationEngine.removeLocationEngineListener(locationEngineListener);
+        }
+
+    }
+
+    //User functions go below here
+
+    private void fetchTheDogFromFirebase(){
+
+        // This is the event listener from the firebase database for a single test user
+        firebaseDatabaseReference.addValueEventListener(new ValueEventListener() {
+
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                // This method is called once with the initial value and again
+                // whenever data at this location is updated.
+                Double lat = dataSnapshot.child("testuser").child("lat").getValue(Double.class);
+                Double lng = dataSnapshot.child("testuser").child("lng").getValue(Double.class);
+                map.removeMarker(dog.getMarker());
+                dog = new MarkerViewOptions().icon(dogicon).position(new LatLng(lat, lng)).title("moving marker").snippet("watch me go");
+                map.addMarker(dog);
+                Log.d(TAG, "Value is: " + lat + " " + lng);
+
+            }
+
+            @Override
+            public void onCancelled(DatabaseError error) {
+                // Failed to read value
+                Log.w(TAG, "Failed to read value.", error.toException());
+            }
+        });
+
+    }
+
+    private void uploadTheDronesToGeofire(){
+        /*
+        description needed
+         */
+
+        if(lastLocation != null){
+            // this creates a few fake drone entries in the data base using the location I just got from the device
+            // I've supplied offsets to each of them
+            // TODO: these should be in their own app simulating flight
+
+            geoFire.setLocation("Rouge One", new GeoLocation(lastLocation.getLatitude() + .0007, lastLocation.getLongitude() + .0008));
+            geoFire.setLocation("Red One", new GeoLocation(lastLocation.getLatitude() + .0002, lastLocation.getLongitude() + .0003));
+            geoFire.setLocation("Echo Seven", new GeoLocation(lastLocation.getLatitude() - .0009, lastLocation.getLongitude() - .0003));
+            geoFire.setLocation("Jedi One", new GeoLocation(lastLocation.getLatitude() - .0002, lastLocation.getLongitude() + .0004));
+            geoFire.setLocation("Red Leader", new GeoLocation(lastLocation.getLatitude() + .0005, lastLocation.getLongitude() - .0006));
+            geoFire.setLocation("Red three", new GeoLocation(lastLocation.getLatitude() + .0002, lastLocation.getLongitude() + .0003));
+            geoFire.setLocation("Red six", new GeoLocation(lastLocation.getLatitude() - .001, lastLocation.getLongitude() - .0009));
+            geoFire.setLocation("Red twelve", new GeoLocation(lastLocation.getLatitude() - .0007, lastLocation.getLongitude() + .0014));
+            geoFire.setLocation("Red five", new GeoLocation(lastLocation.getLatitude() + .0015, lastLocation.getLongitude() - .0019));
+
+        }
+
+    }
+
+    private void updateDrones(){
+        /*
+        description needed
+         */
+
+        if (lastLocation != null){
+
+            System.out.println(String.format("Radius is %f", radius));
+            // this is were I set up the location based geoquery based off of the users location I got earlier
+            geoQuery = geoFire.queryAtLocation(new GeoLocation(lastLocation.getLatitude(), lastLocation.getLongitude()), radius);
+
+            //  this is the event listener for the geoquery
+            geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
+
+                @Override
+                public void onKeyEntered(String key, GeoLocation location) {
+                    //map.removeMarker(geoFireDrone.getMarker());
+                    geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(location.latitude, location.longitude)).title("GeoFire Marker").snippet(String.format("%s", key));
+
+                    droneMarker = map.addMarker(geoFireDrone);
+
+                    System.out.println(String.format("Key %s entered the search area at [%f,%f]", key, location.latitude, location.longitude));
+                }
+
+                @Override
+                public void onKeyExited(String key) {
+
+                    map.removeMarker(geoFireDrone.getMarker());
+                    System.out.println(String.format("Key %s is no longer in the search area", key));
+                }
+
+                @Override
+                public void onKeyMoved(String key, GeoLocation location) {
+
+
+                    geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(location.latitude, location.longitude)).title("GeoFire Marker").snippet(String.format("%s", key));
+                    map.removeMarker(droneMarker);
+                    droneMarker = map.addMarker(geoFireDrone);
+
+                    System.out.println(String.format("Key %s moved within the search area to [%f,%f]", key, location.latitude, location.longitude));
+                }
+
+                @Override
+                public void onGeoQueryReady() {
+                    System.out.println("All initial data has been loaded and events have been fired!");
+                }
+
+                @Override
+                public void onGeoQueryError(DatabaseError error) {
+                    System.err.println("There was an error with this query: " + error);
+                }
+            });
+        }
 
     }
 
     private void toggleGps(boolean enableGps) {
+        /*
+        description needed
+         */
+
         if (enableGps) {
             // Check if user has granted location permission
-            if (!locationServices.areLocationPermissionsGranted()) {
-                ActivityCompat.requestPermissions(this, new String[]{
-                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                        Manifest.permission.ACCESS_FINE_LOCATION}, PERMISSIONS_LOCATION);
+            permissionsManager = new PermissionsManager(this);
+            if (!PermissionsManager.areLocationPermissionsGranted(MainActivity.this)) {
+                permissionsManager.requestLocationPermissions(MainActivity.this);
             } else {
                 enableLocation(true);
             }
@@ -280,12 +395,16 @@ public class MainActivity extends AppCompatActivity {
     private void enableLocation(boolean enabled) {
         if (enabled) {
             // If we have the last location of the user, we can move the camera to that position.
-            Location lastLocation = locationServices.getLastLocation();
+            // lastLocation = locationEngine.getLastLocation();
             if (lastLocation != null) {
                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastLocation), 16));
             }
 
-            locationServices.addLocationListener(new LocationListener() {
+            locationEngineListener = new LocationEngineListener() {
+                @Override
+                public void onConnected() {
+                    //locationEngine.requestLocationUpdates();
+                }
                 @Override
                 public void onLocationChanged(Location location) {
                     if (location != null) {
@@ -294,10 +413,12 @@ public class MainActivity extends AppCompatActivity {
                         // changes. When the user disables and then enables the location again, this
                         // listener is registered again and will adjust the camera once again.
                         map.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location), 16));
-                        locationServices.removeLocationListener(this);
+                        locationEngine.removeLocationEngineListener(this);
+
                     }
                 }
-            });
+            };
+            locationEngine.addLocationEngineListener(locationEngineListener);
             floatingActionButton.setImageResource(R.drawable.ic_location_disabled_24dp);
         } else {
             floatingActionButton.setImageResource(R.drawable.ic_my_location_24dp);
@@ -307,16 +428,52 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    public void onRequestPermissionsResult(
-            int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if (requestCode == PERMISSIONS_LOCATION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                enableLocation(true);
-            }
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        permissionsManager.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    }
+
+    private void setInitialMapPosition() {
+        Location lastLocation = locationEngine.getLastLocation();
+        if (lastLocation != null) {
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastLocation), 16));
+
+        }
+    }
+
+    @Override
+    public void onExplanationNeeded(List<String> permissionsToExplain) {
+        Toast.makeText(this, "This app needs location permissions in order to show its functionality.",
+                Toast.LENGTH_LONG).show();
+
+    }
+
+    @Override
+    public void onPermissionResult(boolean granted) {
+        if (granted) {
+            enableLocation(true);
+        } else {
+            Toast.makeText(this, "You didn't grant location permissions.",
+                    Toast.LENGTH_LONG).show();
+            finish();
+        }
+    }
+
+    private static class LatLngEvaluator implements TypeEvaluator<LatLng> {
+        // Method is used to interpolate the marker animation.
+
+        private LatLng latLng = new LatLng();
+
+        @Override
+        public LatLng evaluate(float fraction, LatLng startValue, LatLng endValue) {
+            latLng.setLatitude(startValue.getLatitude()
+                    + ((endValue.getLatitude() - startValue.getLatitude()) * fraction));
+            latLng.setLongitude(startValue.getLongitude()
+                    + ((endValue.getLongitude() - startValue.getLongitude()) * fraction));
+            return latLng;
         }
     }
 
 
-
-
 }
+
+

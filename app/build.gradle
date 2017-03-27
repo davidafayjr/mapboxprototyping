@@ -22,18 +22,11 @@ repositories {
     mavenCentral()
 }
 
-
-
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
-
-    //add Mapbox SDK dependency
-    compile('com.mapbox.mapboxsdk:mapbox-android-sdk:4.2.2@aar') {
-        transitive = true
-    }
 
 
     compile 'com.android.support:appcompat-v7:25.3.0'
@@ -42,6 +35,17 @@ dependencies {
     compile 'com.google.firebase:firebase-auth:10.2.0'
     compile 'com.firebase:geofire-android:2.1.1'
     testCompile 'junit:junit:4.12'
+
+    //add Mapbox SDK dependency
+
+    compile ('com.mapbox.mapboxsdk:mapbox-android-sdk:5.0.1@aar'){
+        transitive=true
+    }
+
+    compile ('com.mapbox.mapboxsdk:mapbox-android-services:2.0.0@aar'){
+        transitive=true
+    }
+
 
 
 }
