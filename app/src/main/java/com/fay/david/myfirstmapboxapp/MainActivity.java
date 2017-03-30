@@ -178,75 +178,9 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
                 uploadTheDronesToGeofire();
 
-                //updateDrones();
+                updateDrones(drones);
                 fetchTheDogFromFirebase();
 
-                if (lastLocation != null){
-
-                    // this is were I set up the location based geoquery based off of the users location I got earlier
-                    geoQuery = geoFire.queryAtLocation(new GeoLocation(lastLocation.getLatitude(), lastLocation.getLongitude()), radius);
-
-                    // geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(0, 0)).title("GeoFire Marker").snippet(String.format("none"));
-                    //droneMarker = map.addMarker(geoFireDrone);
-
-                    //  this is the event listener for the geoquery
-                    geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
-
-                        @Override
-                        public void onKeyEntered(String key, GeoLocation location) {
-                            if(drones.get(key)!=null){
-                                droneMarker = drones.get(key);
-                                drones.remove(key);
-                                map.removeMarker(droneMarker);
-                            }
-                            //map.removeMarker(geoFireDrone.getMarker());
-                            geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(location.latitude, location.longitude)).title("GeoFire Marker").snippet(String.format("%s", key));
-                            droneMarker = map.addMarker(geoFireDrone);
-                            drones.put(key, droneMarker);
-
-                            System.out.println(String.format("Key %s entered the search area at [%f,%f]", key, location.latitude, location.longitude));
-                        }
-
-                        @Override
-                        public void onKeyExited(String key) {
-                            droneMarker = drones.get(key);
-                            drones.remove(key);
-                            map.removeMarker(droneMarker);
-
-                            System.out.println(String.format("Key %s is no longer in the search area", key));
-                        }
-
-                        @Override
-                        public void onKeyMoved(String key, GeoLocation location) {
-
-                            droneMarker = drones.get(key);
-                            drones.remove(key);
-//                            if(droneMarker != null) {
-//                                map.removeMarker(droneMarker);
-//                            }
-//                            geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(location.latitude, location.longitude)).title("GeoFire Marker").snippet(String.format("%s", key));
-//                            droneMarker = map.addMarker(geoFireDrone);
-
-                            ValueAnimator markerAnimator = ObjectAnimator.ofObject(droneMarker, "position",
-                                    new LatLngEvaluator(), droneMarker.getPosition(), new LatLng(location.latitude, location.longitude));
-                            markerAnimator.setDuration(200);
-                            markerAnimator.start();
-                            drones.put(key, droneMarker);
-
-                            System.out.println(String.format("Key %s moved within the search area to [%f,%f]", key, location.latitude, location.longitude));
-                        }
-
-                        @Override
-                        public void onGeoQueryReady() {
-                            System.out.println("All initial data has been loaded and events have been fired!");
-                        }
-
-                        @Override
-                        public void onGeoQueryError(DatabaseError error) {
-                            System.err.println("There was an error with this query: " + error);
-                        }
-                    });
-                }
 
                 map.setOnCameraChangeListener(new MapboxMap.OnCameraChangeListener() {
                     @Override
@@ -284,6 +218,7 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
     public void onResume() {
         super.onResume();
         mapView.onResume();
+        lastLocation = locationEngine.getLastLocation();
     }
 
     @Override
@@ -294,6 +229,7 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
             locationEngine.activate();
             locationEngine.requestLocationUpdates();
             locationEngine.addLocationEngineListener(locationEngineListener);
+            lastLocation = locationEngine.getLastLocation();
 
         }
 
@@ -393,70 +329,69 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
     }
 
-//    private void updateDrones(){
-//
-//        if (lastLocation != null){
-//
-//
-//            // this is were I set up the location based geoquery based off of the users location I got earlier
-//            geoQuery = geoFire.queryAtLocation(new GeoLocation(lastLocation.getLatitude(), lastLocation.getLongitude()), radius);
-//
-//            // geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(0, 0)).title("GeoFire Marker").snippet(String.format("none"));
-//            //droneMarker = map.addMarker(geoFireDrone);
-//
-//            //  this is the event listener for the geoquery
-//            geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
-//
-//                @Override
-//                public void onKeyEntered(String key, GeoLocation location) {
-//
-//                    //map.removeMarker(geoFireDrone.getMarker());
-//                    geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(location.latitude, location.longitude)).title("GeoFire Marker").snippet(String.format("%s", key));
-//                    droneMarker = map.addMarker(geoFireDrone);
-//
-//                    System.out.println(String.format("Key %s entered the search area at [%f,%f]", key, location.latitude, location.longitude));
-//                }
-//
-//                @Override
-//                public void onKeyExited(String key) {
-//
-//                    System.out.println(String.format("Key %s is no longer in the search area", key));
-//                }
-//
-//                @Override
-//                public void onKeyMoved(String key, GeoLocation location) {
-//
-//                    System.out.println(String.format("animating"));
-//
-//
-//                    ValueAnimator markerAnimator = ObjectAnimator.ofObject(droneMarker, "position",
-//                            new LatLngEvaluator(), droneMarker.getPosition(), new LatLng(location.latitude, location.longitude));
-//                    markerAnimator.setDuration(2);
-//                    markerAnimator.start();
-//                    //droneMarker.setPosition(new LatLng(location.latitude, location.longitude));
-//
-////                    if(droneMarkerObject.droneMarker != null) {
-////                        map.removeMarker(droneMarkerObject.droneMarker);
-////                    }
-////                    droneMarkerObject.geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(location.latitude, location.longitude)).title("GeoFire Marker").snippet(String.format("%s", key));
-////                    droneMarkerObject.droneMarker = map.addMarker(droneMarkerObject.geoFireDrone);
-//
-//                    System.out.println(String.format("Key %s moved within the search area to [%f,%f]", key, location.latitude, location.longitude));
-//                }
-//
-//                @Override
-//                public void onGeoQueryReady() {
-//                    System.out.println("All initial data has been loaded and events have been fired!");
-//                }
-//
-//                @Override
-//                public void onGeoQueryError(DatabaseError error) {
-//                    System.err.println("There was an error with this query: " + error);
-//                }
-//            });
-//        }
-//
-//    }
+    private void updateDrones(final Map<String, Marker>drones){
+
+        if (lastLocation != null){
+
+            // this is were I set up the location based geoquery based off of the users location I got earlier
+            geoQuery = geoFire.queryAtLocation(new GeoLocation(lastLocation.getLatitude(), lastLocation.getLongitude()), radius);
+
+            //  this is the event listener for the geoquery
+            geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
+
+                @Override
+                public void onKeyEntered(String key, GeoLocation location) {
+                    if(drones.get(key)!=null){
+                        droneMarker = drones.get(key);
+                        drones.remove(key);
+                        map.removeMarker(droneMarker);
+                    }
+                    //map.removeMarker(geoFireDrone.getMarker());
+                    geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(location.latitude, location.longitude)).title("GeoFire Marker").snippet(String.format("%s", key));
+                    droneMarker = map.addMarker(geoFireDrone);
+                    drones.put(key, droneMarker);
+
+                    System.out.println(String.format("Key %s entered the search area at [%f,%f]", key, location.latitude, location.longitude));
+                }
+
+                @Override
+                public void onKeyExited(String key) {
+                    droneMarker = drones.get(key);
+                    drones.remove(key);
+                    map.removeMarker(droneMarker);
+
+                    System.out.println(String.format("Key %s is no longer in the search area", key));
+                }
+
+                @Override
+                public void onKeyMoved(String key, GeoLocation location) {
+
+                    droneMarker = drones.get(key);
+                    drones.remove(key);
+
+                    ValueAnimator markerAnimator = ObjectAnimator.ofObject(droneMarker, "position",
+                            new LatLngEvaluator(), droneMarker.getPosition(), new LatLng(location.latitude, location.longitude));
+                    markerAnimator.setDuration(200);
+                    markerAnimator.start();
+                    drones.put(key, droneMarker);
+
+                    System.out.println(String.format("Key %s moved within the search area to [%f,%f]", key, location.latitude, location.longitude));
+                }
+
+                @Override
+                public void onGeoQueryReady() {
+                    System.out.println("All initial data has been loaded and events have been fired!");
+                }
+
+                @Override
+                public void onGeoQueryError(DatabaseError error) {
+                    System.err.println("There was an error with this query: " + error);
+                }
+            });
+        }
+
+
+    }
 
     private void toggleGps(boolean enableGps) {
         /*
@@ -479,7 +414,7 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
     private void enableLocation(boolean enabled) {
         if (enabled) {
             // If we have the last location of the user, we can move the camera to that position.
-            // lastLocation = locationEngine.getLastLocation();
+            lastLocation = locationEngine.getLastLocation();
             if (lastLocation != null) {
                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lastLocation), 16));
             }
@@ -487,7 +422,7 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
             locationEngineListener = new LocationEngineListener() {
                 @Override
                 public void onConnected() {
-                    //locationEngine.requestLocationUpdates();
+                    locationEngine.requestLocationUpdates();
                 }
                 @Override
                 public void onLocationChanged(Location location) {
