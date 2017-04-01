@@ -5,6 +5,7 @@ import android.animation.ObjectAnimator;
 import android.animation.TypeEvaluator;
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.Color;
 import android.location.Criteria;
 import android.location.LocationManager;
 import android.support.v4.content.ContextCompat;
@@ -30,6 +31,7 @@ import com.firebase.geofire.GeoLocation;
 import com.firebase.geofire.GeoQuery;
 import com.firebase.geofire.GeoQueryEventListener;
 
+import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -39,6 +41,8 @@ import com.google.firebase.database.ValueEventListener;
 import com.mapbox.mapboxsdk.Mapbox;
 import com.mapbox.mapboxsdk.annotations.Marker;
 import com.mapbox.mapboxsdk.annotations.MarkerView;
+import com.mapbox.mapboxsdk.annotations.Polygon;
+import com.mapbox.mapboxsdk.annotations.PolygonOptions;
 import com.mapbox.mapboxsdk.camera.CameraPosition;
 import com.mapbox.mapboxsdk.camera.CameraUpdateFactory;
 import com.mapbox.mapboxsdk.annotations.Icon;
@@ -57,7 +61,11 @@ import com.mapbox.services.android.telemetry.location.LocationEngineListener;
 import com.mapbox.services.android.telemetry.permissions.PermissionsListener;
 import com.mapbox.services.android.telemetry.permissions.PermissionsManager;
 
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -87,7 +95,9 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
     private MarkerViewOptions dog;
     private MarkerViewOptions home;
     private GeoFire geoFire;
-    private DatabaseReference firebaseDatabaseReference;
+    private DatabaseReference firebaseDatabaseLocationReference;
+    private DatabaseReference firebaseDatabaseNoFlyZoneReference;
+    private DatabaseReference firebaseDatabaseUserInfoReference;
     private DatabaseReference geofireDatabaseReference;
     public MarkerViewOptions geoFireDrone;
     public Marker droneMarker;
@@ -102,6 +112,8 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
         super.onCreate(savedInstanceState);
 
         final Map<String, Marker>drones = new HashMap<String, Marker>();
+        final Map<String, ArrayList>NoFlyZones = new HashMap<String, ArrayList>();
+        final Map<String, Polygon>NoFlyZonesPolygons = new HashMap<String, Polygon>();
 
         radius =0.2;
         lastRadius = 0.0;
@@ -113,7 +125,10 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
         FirebaseDatabase mDatabase = FirebaseDatabase.getInstance();
 
         //get a reference to the location entries in the database
-        firebaseDatabaseReference = mDatabase.getReference("location");
+        firebaseDatabaseLocationReference = mDatabase.getReference("location");
+        firebaseDatabaseNoFlyZoneReference = mDatabase.getReference("NoFlyZones");
+        firebaseDatabaseUserInfoReference = mDatabase.getReference("UserInfo");
+
 
         // GeoFire database rference
         geofireDatabaseReference = FirebaseDatabase.getInstance().getReference("GeoFire");
@@ -141,11 +156,45 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
         mapView = (MapView) findViewById(R.id.mapview);
         mapView.onCreate(savedInstanceState);
 
+        // This is the event listener from the firebase database for a single test user
+        firebaseDatabaseNoFlyZoneReference.addChildEventListener(new ChildEventListener() {
+
+            @Override
+            public void onChildAdded(DataSnapshot dataSnapshot, String prevChildKey) {
+                // get the string containing the noflyzone points
+                String noflyzonedata = (String)dataSnapshot.getValue();
+                // split the sting of no fly zone points into an array
+                ArrayList<String> noFlyZonePoints = new ArrayList<>(Arrays.asList(noflyzonedata.split("\\s+")));
+                // Add no flyzone to map of no fly zones
+                NoFlyZones.put(dataSnapshot.getKey(), noFlyZonePoints);
+
+            }
+            //TODO update what to do with no-fly zones in these methods
+            @Override
+            public void onChildChanged(DataSnapshot dataSnapshot, String prevChildKey) {}
+
+            @Override
+            public void onChildRemoved(DataSnapshot dataSnapshot) {
+                // clean up after a noflyzone has been removed from the database
+                NoFlyZones.remove(dataSnapshot.getKey());
+                NoFlyZonesPolygons.get(dataSnapshot.getKey()).remove();
+            }
+
+            @Override
+            public void onChildMoved(DataSnapshot dataSnapshot, String prevChildKey) {}
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {}
+        });
+
+        //TODO write a similar set of listener for the user information and pass it to the drone display listeners
+
         // the creates the the MapboxMap display and places one marker on it
         // the style is also set here
         mapView.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(final MapboxMap mapboxMap) {
+                
 
                 map = mapboxMap;
                 // customize map with markers, polylines etc
@@ -180,6 +229,16 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
                 updateDrones(drones);
                 fetchTheDogFromFirebase();
+
+
+                // add the no fly-zones on by one
+                // this may be better placed in on child added...
+                for(String currentKey : NoFlyZones.keySet()) {
+
+                    NoFlyZonesPolygons.put(currentKey, drawPolygon(map, NoFlyZones.get(currentKey)));
+
+                }
+
 
 
                 map.setOnCameraChangeListener(new MapboxMap.OnCameraChangeListener() {
@@ -278,10 +337,13 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
     //User functions go below here
 
+
+
+
     private void fetchTheDogFromFirebase(){
 
         // This is the event listener from the firebase database for a single test user
-        firebaseDatabaseReference.addValueEventListener(new ValueEventListener() {
+        firebaseDatabaseLocationReference.addValueEventListener(new ValueEventListener() {
 
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
@@ -390,6 +452,30 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
             });
         }
 
+
+    }
+
+    private Polygon drawPolygon(MapboxMap mapboxMap, ArrayList noFlyZone) {
+        /*
+        Draw one no-fly zone on the map
+         */
+
+        List<LatLng> polygon = new ArrayList<>();
+        for(Iterator<String> i = noFlyZone.iterator(); i.hasNext(); ) {
+            String latLngAlt = i.next();
+            ArrayList<String> eachPoint = new ArrayList<String>(Arrays.asList(latLngAlt.split(",")));
+            double lat = Double.parseDouble(eachPoint.get(1));
+            double lng = Double.parseDouble(eachPoint.get(0));
+            polygon.add(new LatLng(lat, lng));
+
+        }
+
+        Polygon crurrentNoflyzon = mapboxMap.addPolygon(new PolygonOptions()
+                .addAll(polygon)
+                .fillColor(Color.RED)
+                .alpha((float)0.3));
+
+       return crurrentNoflyzon;
 
     }
 
