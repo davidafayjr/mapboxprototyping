@@ -156,45 +156,13 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
         mapView = (MapView) findViewById(R.id.mapview);
         mapView.onCreate(savedInstanceState);
 
-        // This is the event listener from the firebase database for a single test user
-        firebaseDatabaseNoFlyZoneReference.addChildEventListener(new ChildEventListener() {
-
-            @Override
-            public void onChildAdded(DataSnapshot dataSnapshot, String prevChildKey) {
-                // get the string containing the noflyzone points
-                String noflyzonedata = (String)dataSnapshot.getValue();
-                // split the sting of no fly zone points into an array
-                ArrayList<String> noFlyZonePoints = new ArrayList<>(Arrays.asList(noflyzonedata.split("\\s+")));
-                // Add no flyzone to map of no fly zones
-                NoFlyZones.put(dataSnapshot.getKey(), noFlyZonePoints);
-
-            }
-            //TODO update what to do with no-fly zones in these methods
-            @Override
-            public void onChildChanged(DataSnapshot dataSnapshot, String prevChildKey) {}
-
-            @Override
-            public void onChildRemoved(DataSnapshot dataSnapshot) {
-                // clean up after a noflyzone has been removed from the database
-                NoFlyZones.remove(dataSnapshot.getKey());
-                NoFlyZonesPolygons.get(dataSnapshot.getKey()).remove();
-            }
-
-            @Override
-            public void onChildMoved(DataSnapshot dataSnapshot, String prevChildKey) {}
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {}
-        });
-
-        //TODO write a similar set of listener for the user information and pass it to the drone display listeners
 
         // the creates the the MapboxMap display and places one marker on it
         // the style is also set here
         mapView.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(final MapboxMap mapboxMap) {
-                
+
 
                 map = mapboxMap;
                 // customize map with markers, polylines etc
@@ -233,11 +201,47 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
                 // add the no fly-zones on by one
                 // this may be better placed in on child added...
-                for(String currentKey : NoFlyZones.keySet()) {
+//                for(String currentKey : NoFlyZones.keySet()) {
+//
+//                    NoFlyZonesPolygons.put(currentKey, drawPolygon(map, NoFlyZones.get(currentKey)));
+//
+//                }
 
-                    NoFlyZonesPolygons.put(currentKey, drawPolygon(map, NoFlyZones.get(currentKey)));
+                // This is the event listener from the firebase database for a single test user
+                firebaseDatabaseNoFlyZoneReference.addChildEventListener(new ChildEventListener() {
 
-                }
+                    @Override
+                    public void onChildAdded(DataSnapshot dataSnapshot, String prevChildKey) {
+                        // get the string containing the noflyzone points
+                        String noflyzonedata = (String)dataSnapshot.getValue();
+                        // split the sting of no fly zone points into an array
+                        ArrayList<String> noFlyZonePoints = new ArrayList<>(Arrays.asList(noflyzonedata.split("\\s+")));
+                        // Add no flyzone to map of no fly zones
+                        NoFlyZones.put(dataSnapshot.getKey(), noFlyZonePoints);
+                        NoFlyZonesPolygons.put(dataSnapshot.getKey(), drawPolygon(map, NoFlyZones.get(dataSnapshot.getKey())));
+
+                    }
+                    //TODO update what to do with no-fly zones in these methods
+                    @Override
+                    public void onChildChanged(DataSnapshot dataSnapshot, String prevChildKey) {}
+
+                    @Override
+                    public void onChildRemoved(DataSnapshot dataSnapshot) {
+                        // clean up after a noflyzone has been removed from the database
+                        NoFlyZones.remove(dataSnapshot.getKey());
+                        NoFlyZonesPolygons.get(dataSnapshot.getKey()).remove();
+                    }
+
+                    @Override
+                    public void onChildMoved(DataSnapshot dataSnapshot, String prevChildKey) {}
+
+                    @Override
+                    public void onCancelled(DatabaseError databaseError) {}
+                });
+
+
+                //TODO write a similar set of listener for the user information and pass it to the drone display listeners
+
 
 
 
