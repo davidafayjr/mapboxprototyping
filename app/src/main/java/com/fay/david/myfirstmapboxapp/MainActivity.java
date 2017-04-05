@@ -213,7 +213,13 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
                     @Override
                     public void onChildAdded(DataSnapshot dataSnapshot, String prevChildKey) {
                         // get the string containing the noflyzone points
-                        String noflyzonedata = (String)dataSnapshot.getValue();
+                        System.out.println(String.format("Key %s" ,dataSnapshot.getKey() ));
+                        if (dataSnapshot.getKey().equals("numberOfZones")) {
+                            return;
+                        }
+
+                        String noflyzonedata = (String) dataSnapshot.getValue();
+
                         // split the sting of no fly zone points into an array
                         ArrayList<String> noFlyZonePoints = new ArrayList<>(Arrays.asList(noflyzonedata.split("\\s+")));
                         // Add no flyzone to map of no fly zones
