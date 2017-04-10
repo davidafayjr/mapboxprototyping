@@ -125,7 +125,7 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
         FirebaseDatabase mDatabase = FirebaseDatabase.getInstance();
 
         //get a reference to the location entries in the database
-        firebaseDatabaseLocationReference = mDatabase.getReference("location");
+        firebaseDatabaseLocationReference = mDatabase.getReference("dog");
         firebaseDatabaseNoFlyZoneReference = mDatabase.getReference("NoFlyZones");
         firebaseDatabaseUserInfoReference = mDatabase.getReference("UserInfo");
 
@@ -214,12 +214,11 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
                     public void onChildAdded(DataSnapshot dataSnapshot, String prevChildKey) {
                         // get the string containing the noflyzone points
                         System.out.println(String.format("Key %s" ,dataSnapshot.getKey() ));
+
                         if (dataSnapshot.getKey().equals("numberOfZones")) {
                             return;
                         }
-
                         String noflyzonedata = (String) dataSnapshot.getValue();
-
                         // split the sting of no fly zone points into an array
                         ArrayList<String> noFlyZonePoints = new ArrayList<>(Arrays.asList(noflyzonedata.split("\\s+")));
                         // Add no flyzone to map of no fly zones
@@ -248,9 +247,6 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
                 //TODO write a similar set of listener for the user information and pass it to the drone display listeners
 
-
-
-
                 map.setOnCameraChangeListener(new MapboxMap.OnCameraChangeListener() {
                     @Override
                     public void onCameraChange(CameraPosition position) {
@@ -265,7 +261,6 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
                         // System.out.println(String.format("Radius is %f", radius));
                         geoQuery.setRadius(radius);
-
                     }
                 });
             }
@@ -347,9 +342,6 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
     //User functions go below here
 
-
-
-
     private void fetchTheDogFromFirebase(){
 
         // This is the event listener from the firebase database for a single test user
@@ -359,8 +351,8 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
             public void onDataChange(DataSnapshot dataSnapshot) {
                 // This method is called once with the initial value and again
                 // whenever data at this location is updated.
-                Double lat = dataSnapshot.child("testuser").child("lat").getValue(Double.class);
-                Double lng = dataSnapshot.child("testuser").child("lng").getValue(Double.class);
+                Double lat = dataSnapshot.child("lat").getValue(Double.class);
+                Double lng = dataSnapshot.child("lng").getValue(Double.class);
                 map.removeMarker(dog.getMarker());
                 dog = new MarkerViewOptions().icon(dogicon).position(new LatLng(lat, lng)).title("moving marker").snippet("watch me go");
                 map.addMarker(dog);
@@ -399,6 +391,11 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
         }
 
+    }
+
+    private void updateNoFlyZones(){
+
+        
     }
 
     private void updateDrones(final Map<String, Marker>drones){
