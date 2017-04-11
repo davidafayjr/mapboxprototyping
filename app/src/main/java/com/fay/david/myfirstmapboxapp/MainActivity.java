@@ -38,6 +38,7 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
+import com.google.firebase.iid.FirebaseInstanceId;
 import com.mapbox.mapboxsdk.Mapbox;
 import com.mapbox.mapboxsdk.annotations.Marker;
 import com.mapbox.mapboxsdk.annotations.MarkerView;
@@ -74,7 +75,6 @@ import java.util.Map;
 @SuppressWarnings( {"MissingPermission"})
 
 public class MainActivity extends AppCompatActivity implements PermissionsListener {
-
 
     private static final String TAG = "MainActivity";
     private MapView mapView;
@@ -118,13 +118,8 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
         super.onCreate(savedInstanceState);
 
         //Call this to cache the database locally
-        if(mDatabase ==null) {
-
-            FirebaseDatabase.getInstance().setPersistenceEnabled(true);
-
-            //get an instance and reference to the database
-            mDatabase = FirebaseDatabase.getInstance();
-        }
+        // FirebaseDatabase.getInstance().setPersistenceEnabled(true);
+        mDatabase = FirebaseDatabase.getInstance();
 
         //get a reference to the location entries in the database
         firebaseDatabaseLocationReference = mDatabase.getReference("dog");
@@ -244,12 +239,6 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
         super.onResume();
         mapView.onResume();
         lastLocation = locationEngine.getLastLocation();
-        fetchTheDogFromFirebase();
-        updateDroneDescriptions(droneDescription);
-        updateDronePuroposes(dronePurpose);
-        updateDrones(drones);
-        updateNoFlyZones(NoFlyZonesPolygons, NoFlyZones);
-
 
     }
 
@@ -264,63 +253,21 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
             lastLocation = locationEngine.getLastLocation();
         }
 
-        fetchTheDogFromFirebase();
-        updateDroneDescriptions(droneDescription);
-        updateDronePuroposes(dronePurpose);
-        updateDrones(drones);
-        updateNoFlyZones(NoFlyZonesPolygons, NoFlyZones);
-
-
-
     }
 
     @Override
     protected void onStop() {
         super.onStop();
         mapView.onStop();
-        dog.getMarker().remove();
-        home.getMarker().remove();
-        for (Polygon nfz: NoFlyZonesPolygons.values()) {
-            nfz.remove();
-        }
-        if (locationEngine != null && locationEngineListener != null) {
-            locationEngine.removeLocationEngineListener(locationEngineListener);
-            locationEngine.removeLocationUpdates();
-            locationEngine.deactivate();
-        }
-        if(firebaseDatabasePurposeReference != null && firebaseDatabasePurposeChildEventListener != null){
-            firebaseDatabasePurposeReference.removeEventListener(firebaseDatabasePurposeChildEventListener);
-        }
-        if(firebaseDatabaseLocationReference != null && firebaseDatabaseLocationEventListener != null){
-            firebaseDatabaseLocationReference.removeEventListener(firebaseDatabaseLocationEventListener);
-        }
-        if(firebaseDatabaseNoFlyZoneReference != null && firebaseDatabaseNoFlyZoneChildEventListener != null){
-            firebaseDatabaseNoFlyZoneReference.removeEventListener(firebaseDatabaseNoFlyZoneChildEventListener);
-        }
-        if(firebaseDatbaseDescriptionReference != null && firebaseDatbaseDescriptionChildEventListener != null){
-            firebaseDatbaseDescriptionReference.removeEventListener(firebaseDatbaseDescriptionChildEventListener);
-        }
-        if (geoQuery != null) {
-            geoQuery.removeAllListeners();
-            for (Marker marker : drones.values()) {
-                marker.remove();
-            }
-        }
 
-        if(mDatabase !=null){
-            mDatabase.goOffline();
 
-        }
-        if(geofireDatabaseReference != null){
-            geofireDatabaseReference.keepSynced(false);
-        }
     }
 
     @Override
     public void onPause() {
         super.onPause();
         mapView.onPause();
-        mDatabase.goOnline();
+
 
     }
 
@@ -342,39 +289,7 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
     public void onDestroy() {
         super.onDestroy();
         mapView.onDestroy();
-        dog.getMarker().remove();
-        home.getMarker().remove();
 
-        if (locationEngineListener != null) {
-            locationEngine.removeLocationEngineListener(locationEngineListener);
-        }
-        if(firebaseDatabasePurposeReference != null && firebaseDatabasePurposeChildEventListener != null){
-            firebaseDatabasePurposeReference.removeEventListener(firebaseDatabasePurposeChildEventListener);
-        }
-        if(firebaseDatabaseLocationReference != null && firebaseDatabaseLocationEventListener != null){
-            firebaseDatabaseLocationReference.removeEventListener(firebaseDatabaseLocationEventListener);
-        }
-        if(firebaseDatabaseNoFlyZoneReference != null && firebaseDatabaseNoFlyZoneChildEventListener != null){
-            firebaseDatabaseNoFlyZoneReference.removeEventListener(firebaseDatabaseNoFlyZoneChildEventListener);
-        }
-        if(firebaseDatbaseDescriptionReference != null && firebaseDatbaseDescriptionChildEventListener != null){
-            firebaseDatbaseDescriptionReference.removeEventListener(firebaseDatbaseDescriptionChildEventListener);
-        }
-        if (geoQuery != null){
-            geoQuery.removeAllListeners();
-            for (Marker marker: drones.values()) {
-                marker.remove();
-            }
-            drones.clear();
-        }
-
-        if(geofireDatabaseReference != null){
-            geofireDatabaseReference.keepSynced(false);
-        }
-        if(mDatabase !=null){
-            mDatabase.goOffline();
-
-        }
 
     }
 
