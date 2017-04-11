@@ -64,6 +64,7 @@ import com.mapbox.services.android.telemetry.permissions.PermissionsManager;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EventListener;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -74,11 +75,6 @@ import java.util.Map;
 
 public class MainActivity extends AppCompatActivity implements PermissionsListener {
 
-    //TODO: ADD NO-FLY ZONE POLYGONS TO THE APP
-    //TODO: ADD NO-FLY ZONE SECTION TO DATABASE
-    //TODO: IMPLEMENT A BETTER GET CURRENT LOCATION FUNCTION
-    //TODO: CREATE A DRONE SIMULATOR APP THAT FLYS WITH SIMULATED LOCATIONS
-    //TODO: AND TRANSMIT LOCATION BACK TO SERVER AND CHECKS NO-FLY ZONES
 
     private static final String TAG = "MainActivity";
     private MapView mapView;
@@ -95,45 +91,63 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
     private MarkerViewOptions dog;
     private MarkerViewOptions home;
     private GeoFire geoFire;
+    private FirebaseDatabase mDatabase;
     private DatabaseReference firebaseDatabaseLocationReference;
     private DatabaseReference firebaseDatabaseNoFlyZoneReference;
-    private DatabaseReference firebaseDatabaseUserInfoReference;
     private DatabaseReference geofireDatabaseReference;
+    private DatabaseReference firebaseDatbaseDescriptionReference;
+    private DatabaseReference firebaseDatabasePurposeReference;
+    private ChildEventListener firebaseDatabasePurposeChildEventListener;
+    private ValueEventListener firebaseDatabaseLocationEventListener;
+    private ChildEventListener firebaseDatabaseNoFlyZoneChildEventListener;
+    private ChildEventListener firebaseDatbaseDescriptionChildEventListener;
     public MarkerViewOptions geoFireDrone;
     public Marker droneMarker;
     private Icon dogicon;
     private Icon drone;
     private Icon house;
     private double radius;
-    private double lastRadius;
+    private Map<String, Marker>drones;
+    private Map<String, ArrayList>NoFlyZones;
+    private Map<String, Polygon>NoFlyZonesPolygons;
+    private Map<String, String>droneDescription;
+    private Map<String, String>dronePurpose;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        final Map<String, Marker>drones = new HashMap<String, Marker>();
-        final Map<String, ArrayList>NoFlyZones = new HashMap<String, ArrayList>();
-        final Map<String, Polygon>NoFlyZonesPolygons = new HashMap<String, Polygon>();
-
-        radius =0.2;
-        lastRadius = 0.0;
-
         //Call this to cache the database locally
-        FirebaseDatabase.getInstance().setPersistenceEnabled(true);
+        if(mDatabase ==null) {
 
-        //get an instance and reference to the database
-        FirebaseDatabase mDatabase = FirebaseDatabase.getInstance();
+            FirebaseDatabase.getInstance().setPersistenceEnabled(true);
+
+            //get an instance and reference to the database
+            mDatabase = FirebaseDatabase.getInstance();
+        }
 
         //get a reference to the location entries in the database
         firebaseDatabaseLocationReference = mDatabase.getReference("dog");
+        firebaseDatabaseLocationReference.keepSynced(true);
         firebaseDatabaseNoFlyZoneReference = mDatabase.getReference("NoFlyZones");
-        firebaseDatabaseUserInfoReference = mDatabase.getReference("UserInfo");
+        firebaseDatabaseNoFlyZoneReference.keepSynced(true);
+        firebaseDatbaseDescriptionReference = mDatabase.getReference("UserInfo/description");
+        firebaseDatbaseDescriptionReference.keepSynced(true);
+        firebaseDatabasePurposeReference = mDatabase.getReference("UserInfo/purpose");
+        firebaseDatabasePurposeReference.keepSynced(true);
 
+        radius =0.2;
+
+        drones = new HashMap<String, Marker>();
+        NoFlyZones =  new HashMap<String, ArrayList>();
+        NoFlyZonesPolygons = new HashMap<String, Polygon>();
+        droneDescription = new HashMap<String, String>();
+        dronePurpose = new HashMap<String, String>();
 
         // GeoFire database rference
         geofireDatabaseReference = FirebaseDatabase.getInstance().getReference("GeoFire");
+        geofireDatabaseReference.keepSynced(true);
         geoFire = new GeoFire(geofireDatabaseReference);
-
 
         // Mapbox access token is configured here. This needs to be called either in your application
         // object or in the same activity which contains the mapview.
@@ -156,13 +170,11 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
         mapView = (MapView) findViewById(R.id.mapview);
         mapView.onCreate(savedInstanceState);
 
-
         // the creates the the MapboxMap display and places one marker on it
         // the style is also set here
         mapView.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(final MapboxMap mapboxMap) {
-
 
                 map = mapboxMap;
                 // customize map with markers, polylines etc
@@ -183,7 +195,6 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
                 }
 
-
                 if (lastLocation == null) {
                     //force initial location
                     LocationManager service = (LocationManager)
@@ -192,65 +203,17 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
                     String provider = service.getBestProvider(criteria, false);
                     lastLocation = service.getLastKnownLocation(provider);
                 }
-
-                uploadTheDronesToGeofire();
-
-                updateDrones(drones);
                 fetchTheDogFromFirebase();
+                uploadTheDronesToGeofire();
+                updateDroneDescriptions(droneDescription);
+                updateDronePuroposes(dronePurpose);
+                updateDrones(drones);
 
-
-                // add the no fly-zones on by one
-                // this may be better placed in on child added...
-//                for(String currentKey : NoFlyZones.keySet()) {
-//
-//                    NoFlyZonesPolygons.put(currentKey, drawPolygon(map, NoFlyZones.get(currentKey)));
-//
-//                }
-
-                // This is the event listener from the firebase database for a single test user
-                firebaseDatabaseNoFlyZoneReference.addChildEventListener(new ChildEventListener() {
-
-                    @Override
-                    public void onChildAdded(DataSnapshot dataSnapshot, String prevChildKey) {
-                        // get the string containing the noflyzone points
-                        System.out.println(String.format("Key %s" ,dataSnapshot.getKey() ));
-
-                        if (dataSnapshot.getKey().equals("numberOfZones")) {
-                            return;
-                        }
-                        String noflyzonedata = (String) dataSnapshot.getValue();
-                        // split the sting of no fly zone points into an array
-                        ArrayList<String> noFlyZonePoints = new ArrayList<>(Arrays.asList(noflyzonedata.split("\\s+")));
-                        // Add no flyzone to map of no fly zones
-                        NoFlyZones.put(dataSnapshot.getKey(), noFlyZonePoints);
-                        NoFlyZonesPolygons.put(dataSnapshot.getKey(), drawPolygon(map, NoFlyZones.get(dataSnapshot.getKey())));
-
-                    }
-                    //TODO update what to do with no-fly zones in these methods
-                    @Override
-                    public void onChildChanged(DataSnapshot dataSnapshot, String prevChildKey) {}
-
-                    @Override
-                    public void onChildRemoved(DataSnapshot dataSnapshot) {
-                        // clean up after a noflyzone has been removed from the database
-                        NoFlyZones.remove(dataSnapshot.getKey());
-                        NoFlyZonesPolygons.get(dataSnapshot.getKey()).remove();
-                    }
-
-                    @Override
-                    public void onChildMoved(DataSnapshot dataSnapshot, String prevChildKey) {}
-
-                    @Override
-                    public void onCancelled(DatabaseError databaseError) {}
-                });
-
-
-                //TODO write a similar set of listener for the user information and pass it to the drone display listeners
+                updateNoFlyZones(NoFlyZonesPolygons, NoFlyZones);
 
                 map.setOnCameraChangeListener(new MapboxMap.OnCameraChangeListener() {
                     @Override
                     public void onCameraChange(CameraPosition position) {
-
                         LatLngBounds bounds = mapboxMap.getProjection().getVisibleRegion().latLngBounds;
                         double northLat = bounds.getLatNorth();
                         double eastLng = bounds.getLonEast();
@@ -258,8 +221,6 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
                         LatLng northEastCorner = new LatLng(northLat, eastLng);
                         radius = center.distanceTo(northEastCorner);
                         radius = radius * .001;
-
-                        // System.out.println(String.format("Radius is %f", radius));
                         geoQuery.setRadius(radius);
                     }
                 });
@@ -283,6 +244,13 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
         super.onResume();
         mapView.onResume();
         lastLocation = locationEngine.getLastLocation();
+        fetchTheDogFromFirebase();
+        updateDroneDescriptions(droneDescription);
+        updateDronePuroposes(dronePurpose);
+        updateDrones(drones);
+        updateNoFlyZones(NoFlyZonesPolygons, NoFlyZones);
+
+
     }
 
     @Override
@@ -294,8 +262,15 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
             locationEngine.requestLocationUpdates();
             locationEngine.addLocationEngineListener(locationEngineListener);
             lastLocation = locationEngine.getLastLocation();
-
         }
+
+        fetchTheDogFromFirebase();
+        updateDroneDescriptions(droneDescription);
+        updateDronePuroposes(dronePurpose);
+        updateDrones(drones);
+        updateNoFlyZones(NoFlyZonesPolygons, NoFlyZones);
+
+
 
     }
 
@@ -303,10 +278,41 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
     protected void onStop() {
         super.onStop();
         mapView.onStop();
+        dog.getMarker().remove();
+        home.getMarker().remove();
+        for (Polygon nfz: NoFlyZonesPolygons.values()) {
+            nfz.remove();
+        }
         if (locationEngine != null && locationEngineListener != null) {
             locationEngine.removeLocationEngineListener(locationEngineListener);
             locationEngine.removeLocationUpdates();
             locationEngine.deactivate();
+        }
+        if(firebaseDatabasePurposeReference != null && firebaseDatabasePurposeChildEventListener != null){
+            firebaseDatabasePurposeReference.removeEventListener(firebaseDatabasePurposeChildEventListener);
+        }
+        if(firebaseDatabaseLocationReference != null && firebaseDatabaseLocationEventListener != null){
+            firebaseDatabaseLocationReference.removeEventListener(firebaseDatabaseLocationEventListener);
+        }
+        if(firebaseDatabaseNoFlyZoneReference != null && firebaseDatabaseNoFlyZoneChildEventListener != null){
+            firebaseDatabaseNoFlyZoneReference.removeEventListener(firebaseDatabaseNoFlyZoneChildEventListener);
+        }
+        if(firebaseDatbaseDescriptionReference != null && firebaseDatbaseDescriptionChildEventListener != null){
+            firebaseDatbaseDescriptionReference.removeEventListener(firebaseDatbaseDescriptionChildEventListener);
+        }
+        if (geoQuery != null) {
+            geoQuery.removeAllListeners();
+            for (Marker marker : drones.values()) {
+                marker.remove();
+            }
+        }
+
+        if(mDatabase !=null){
+            mDatabase.goOffline();
+
+        }
+        if(geofireDatabaseReference != null){
+            geofireDatabaseReference.keepSynced(false);
         }
     }
 
@@ -314,6 +320,8 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
     public void onPause() {
         super.onPause();
         mapView.onPause();
+        mDatabase.goOnline();
+
     }
 
     @Override
@@ -334,8 +342,38 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
     public void onDestroy() {
         super.onDestroy();
         mapView.onDestroy();
+        dog.getMarker().remove();
+        home.getMarker().remove();
+
         if (locationEngineListener != null) {
             locationEngine.removeLocationEngineListener(locationEngineListener);
+        }
+        if(firebaseDatabasePurposeReference != null && firebaseDatabasePurposeChildEventListener != null){
+            firebaseDatabasePurposeReference.removeEventListener(firebaseDatabasePurposeChildEventListener);
+        }
+        if(firebaseDatabaseLocationReference != null && firebaseDatabaseLocationEventListener != null){
+            firebaseDatabaseLocationReference.removeEventListener(firebaseDatabaseLocationEventListener);
+        }
+        if(firebaseDatabaseNoFlyZoneReference != null && firebaseDatabaseNoFlyZoneChildEventListener != null){
+            firebaseDatabaseNoFlyZoneReference.removeEventListener(firebaseDatabaseNoFlyZoneChildEventListener);
+        }
+        if(firebaseDatbaseDescriptionReference != null && firebaseDatbaseDescriptionChildEventListener != null){
+            firebaseDatbaseDescriptionReference.removeEventListener(firebaseDatbaseDescriptionChildEventListener);
+        }
+        if (geoQuery != null){
+            geoQuery.removeAllListeners();
+            for (Marker marker: drones.values()) {
+                marker.remove();
+            }
+            drones.clear();
+        }
+
+        if(geofireDatabaseReference != null){
+            geofireDatabaseReference.keepSynced(false);
+        }
+        if(mDatabase !=null){
+            mDatabase.goOffline();
+
         }
 
     }
@@ -345,7 +383,7 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
     private void fetchTheDogFromFirebase(){
 
         // This is the event listener from the firebase database for a single test user
-        firebaseDatabaseLocationReference.addValueEventListener(new ValueEventListener() {
+        firebaseDatabaseLocationEventListener = firebaseDatabaseLocationReference.addValueEventListener(new ValueEventListener() {
 
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
@@ -393,9 +431,162 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
 
     }
 
-    private void updateNoFlyZones(){
+    private void updateNoFlyZones(final Map<String, Polygon>NoFlyZonesPolygons, final Map<String, ArrayList>NoFlyZones){
 
-        
+        // This is the event listener from the firebase database for a single test user
+        firebaseDatabaseNoFlyZoneChildEventListener = firebaseDatabaseNoFlyZoneReference.addChildEventListener(new ChildEventListener() {
+
+            @Override
+            public void onChildAdded(DataSnapshot dataSnapshot, String prevChildKey) {
+                // get the string containing the noflyzone points
+                System.out.println(String.format("Key %s" ,dataSnapshot.getKey() ));
+
+                if (dataSnapshot.getKey().equals("numberOfZones")) {
+                    return;
+                }
+                String noflyzonedata = (String) dataSnapshot.getValue();
+                // split the sting of no fly zone points into an array
+                ArrayList<String> noFlyZonePoints = new ArrayList<>(Arrays.asList(noflyzonedata.split("\\s+")));
+                // Add no flyzone to map of no fly zones
+                NoFlyZones.put(dataSnapshot.getKey(), noFlyZonePoints);
+                NoFlyZonesPolygons.put(dataSnapshot.getKey(), drawPolygon(map, NoFlyZones.get(dataSnapshot.getKey())));
+
+            }
+            //TODO update what to do with no-fly zones in these methods
+            @Override
+            public void onChildChanged(DataSnapshot dataSnapshot, String prevChildKey) {
+                // get the string containing the noflyzone points
+                System.out.println(String.format("Key %s" ,dataSnapshot.getKey() ));
+
+                if (dataSnapshot.getKey().equals("numberOfZones")) {
+                    return;
+                }
+                String noflyzonedata = (String) dataSnapshot.getValue();
+                // split the sting of no fly zone points into an array
+                ArrayList<String> noFlyZonePoints = new ArrayList<>(Arrays.asList(noflyzonedata.split("\\s+")));
+                // Add no flyzone to map of no fly zones
+                NoFlyZones.put(dataSnapshot.getKey(), noFlyZonePoints);
+                NoFlyZonesPolygons.put(dataSnapshot.getKey(), drawPolygon(map, NoFlyZones.get(dataSnapshot.getKey())));
+            }
+
+            @Override
+            public void onChildRemoved(DataSnapshot dataSnapshot) {
+                // clean up after a noflyzone has been removed from the database
+                NoFlyZones.remove(dataSnapshot.getKey());
+                NoFlyZonesPolygons.get(dataSnapshot.getKey()).remove();
+            }
+
+            @Override
+            public void onChildMoved(DataSnapshot dataSnapshot, String prevChildKey) {
+                // get the string containing the noflyzone points
+                System.out.println(String.format("Key %s" ,dataSnapshot.getKey() ));
+
+                if (dataSnapshot.getKey().equals("numberOfZones")) {
+                    return;
+                }
+                String noflyzonedata = (String) dataSnapshot.getValue();
+                // split the sting of no fly zone points into an array
+                ArrayList<String> noFlyZonePoints = new ArrayList<>(Arrays.asList(noflyzonedata.split("\\s+")));
+                // Add no flyzone to map of no fly zones
+                NoFlyZones.put(dataSnapshot.getKey(), noFlyZonePoints);
+                NoFlyZonesPolygons.put(dataSnapshot.getKey(), drawPolygon(map, NoFlyZones.get(dataSnapshot.getKey())));
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {}
+        });
+
+    }
+
+    private void updateDroneDescriptions(final Map<String, String>droneDescription) {
+
+        // This is the event listener from the firebase database for a single test user
+        firebaseDatbaseDescriptionChildEventListener = firebaseDatbaseDescriptionReference.addChildEventListener(new ChildEventListener() {
+
+            @Override
+            public void onChildAdded(DataSnapshot dataSnapshot, String prevChildKey) {
+
+                System.out.println(String.format("Key %s", dataSnapshot.getKey()));
+                String droneDescriptionStr = (String) dataSnapshot.getValue();
+                droneDescription.put(dataSnapshot.getKey(), droneDescriptionStr);
+
+
+            }
+
+            //TODO update what to do with no-fly zones in these methods
+            @Override
+            public void onChildChanged(DataSnapshot dataSnapshot, String prevChildKey) {
+
+                System.out.println(String.format("Key %s", dataSnapshot.getKey()));
+                String droneDescriptionStr = (String) dataSnapshot.getValue();
+                droneDescription.put(dataSnapshot.getKey(), droneDescriptionStr);
+
+            }
+
+            @Override
+            public void onChildRemoved(DataSnapshot dataSnapshot) {
+                // clean up after a noflyzone has been removed from the database
+                droneDescription.remove(dataSnapshot.getKey());
+            }
+
+            @Override
+            public void onChildMoved(DataSnapshot dataSnapshot, String prevChildKey) {
+
+                System.out.println(String.format("Key %s", dataSnapshot.getKey()));
+                String droneDescriptionStr = (String) dataSnapshot.getValue();
+                droneDescription.put(dataSnapshot.getKey(), droneDescriptionStr);
+
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+            }
+        });
+    }
+
+    private void updateDronePuroposes(final Map<String, String>dronePurpose){
+
+        // This is the event listener from the firebase database for a single test user
+        firebaseDatabasePurposeChildEventListener = firebaseDatabasePurposeReference.addChildEventListener(new ChildEventListener() {
+
+            @Override
+            public void onChildAdded(DataSnapshot dataSnapshot, String prevChildKey) {
+
+                System.out.println(String.format("Key %s" ,dataSnapshot.getKey() ));
+                String droneDescriptionStr = (String) dataSnapshot.getValue();
+                dronePurpose.put(dataSnapshot.getKey(), droneDescriptionStr);
+
+
+            }
+            //TODO update what to do with no-fly zones in these methods
+            @Override
+            public void onChildChanged(DataSnapshot dataSnapshot, String prevChildKey) {
+
+                System.out.println(String.format("Key %s" ,dataSnapshot.getKey() ));
+                String droneDescriptionStr = (String) dataSnapshot.getValue();
+                dronePurpose.put(dataSnapshot.getKey(), droneDescriptionStr);
+
+            }
+
+            @Override
+            public void onChildRemoved(DataSnapshot dataSnapshot) {
+                // clean up after a noflyzone has been removed from the database
+                dronePurpose.remove(dataSnapshot.getKey());
+            }
+
+            @Override
+            public void onChildMoved(DataSnapshot dataSnapshot, String prevChildKey) {
+
+                System.out.println(String.format("Key %s" ,dataSnapshot.getKey() ));
+                String droneDescriptionStr = (String) dataSnapshot.getValue();
+                dronePurpose.put(dataSnapshot.getKey(), droneDescriptionStr);
+
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {}
+        });
+
     }
 
     private void updateDrones(final Map<String, Marker>drones){
@@ -406,7 +597,7 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
             geoQuery = geoFire.queryAtLocation(new GeoLocation(lastLocation.getLatitude(), lastLocation.getLongitude()), radius);
 
             //  this is the event listener for the geoquery
-            geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
+           geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
 
                 @Override
                 public void onKeyEntered(String key, GeoLocation location) {
@@ -416,7 +607,7 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
                         map.removeMarker(droneMarker);
                     }
                     //map.removeMarker(geoFireDrone.getMarker());
-                    geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(location.latitude, location.longitude)).title("GeoFire Marker").snippet(String.format("%s", key));
+                    geoFireDrone = new MarkerViewOptions().icon(drone).position(new LatLng(location.latitude, location.longitude)).title(String.format("%s", key)).snippet(String.format("Description: %s\nPurpose: %s", droneDescription.get(key), dronePurpose.get(key)));
                     droneMarker = map.addMarker(geoFireDrone);
                     drones.put(key, droneMarker);
 
@@ -458,8 +649,6 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
                 }
             });
         }
-
-
     }
 
     private Polygon drawPolygon(MapboxMap mapboxMap, ArrayList noFlyZone) {
@@ -483,7 +672,6 @@ public class MainActivity extends AppCompatActivity implements PermissionsListen
                 .alpha((float)0.3));
 
        return crurrentNoflyzon;
-
     }
 
     private void toggleGps(boolean enableGps) {
