@@ -5,9 +5,15 @@ This Android application is built using Mapbox, Firebase, and Geofire libraries.
 ## Group 17 Code links
 
 https://github.com/davidafayjr/mapboxprototyping
+
 https://github.com/davidafayjr/RunningDog
+
 https://github.com/davidafayjr/droneSimulator
+
 https://github.com/davidafayjr/firebasewebsocket
+
 https://github.com/davidafayjr/easywsclient
+
 https://github.com/davidafayjr/cfcts_sketch
+
 https://github.com/GSBhub/cfcts_sketch
